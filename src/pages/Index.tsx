@@ -7,11 +7,21 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
         <div className="container max-w-6xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-primary rounded-lg">
-              <FileSearch className="w-5 h-5 text-primary-foreground" />
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-primary rounded-lg">
+                <FileSearch className="w-5 h-5 text-primary-foreground" />
+              </div>
+              <span className="text-xl font-semibold text-foreground">ResumeScreen</span>
             </div>
-            <span className="text-xl font-semibold text-foreground">ResumeScreen</span>
+            <nav>
+              <a 
+                href="/dashboard" 
+                className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+              >
+                Candidate Dashboard
+              </a>
+            </nav>
           </div>
         </div>
       </header>
