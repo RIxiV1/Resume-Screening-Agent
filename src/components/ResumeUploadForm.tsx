@@ -17,7 +17,7 @@ import {
 } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 
-const WEBHOOK_URL = 'https://suhaibbb.app.n8n.cloud/webhook/screen-resume';
+const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/screen-resume`;
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -68,16 +68,34 @@ export function ResumeUploadForm() {
       formData.append('Full Name', data.fullName);
       formData.append('job_description', data.jobDescription);
 
-      const response = await fetch(WEBHOOK_URL, {
+      console.log('Submitting to edge function:', EDGE_FUNCTION_URL);
+
+      const response = await fetch(EDGE_FUNCTION_URL, {
         method: 'POST',
         body: formData,
       });
 
-      if (!response.ok) {
-        throw new Error(`Server responded with status ${response.status}`);
+      // Handle specific error codes
+      if (response.status === 429) {
+        throw new Error('Rate limit exceeded. Please try again in a few moments.');
+      }
+      
+      if (response.status === 402) {
+        throw new Error('Service temporarily unavailable. Please try again later.');
       }
 
-      const responseData = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `Server responded with status ${response.status}`);
+      }
+
+      const responseData = await response.json();
+      console.log('Screening response:', responseData);
+
+      // Check for error in response
+      if (responseData.error) {
+        throw new Error(responseData.error);
+      }
 
       // Validate response against schema
       const parseResult = screeningResultSchema.safeParse(responseData);
