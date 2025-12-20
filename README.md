@@ -1,73 +1,114 @@
-# Welcome to your Lovable project
+# 🤖 AI-Powered Resume Screening Agent
 
-## Project info
+ResumeScreen is an end-to-end AI resume screening system built with:
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+- [n8n](https://n8n.io) for workflow automation
+- [Lovable](https://lovable.dev) for the candidate-facing web app
+- An LLM (Gemini / OpenAI / Groq) for resume–JD matching
 
-## How can I edit this code?
+It lets candidates upload a resume + job description and instantly returns a score, summary, strengths, gaps, and suggested next steps. HR can then choose to send interview or rejection emails automatically.
 
-There are several ways of editing your application.
+---
 
-**Use Lovable**
+## ✨ Features
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+- 📥 Candidate web form (Lovable) with:
+  - Full name, email
+  - Job description text
+  - Resume PDF upload
+- ⚙️ n8n workflow that:
+  - Extracts text from PDF resumes
+  - Merges resume + JD + candidate metadata
+  - Calls an AI Agent to score the candidate from 0–100
+  - Returns structured JSON back to Lovable
+- 📊 Structured output:
+  - `overall_score`
+  - `confidence`
+  - `summary`
+  - `strengths`
+  - `matched_skills`
+  - `years_relevant_experience`
+  - `short_reason`
+  - `recommended_next_steps`
+- 📧 Optional: sends interview / rejection emails based on the AI verdict
 
-Changes made via Lovable will be committed automatically to this repo.
+---
 
-**Use your preferred IDE**
+## 🧱 Architecture
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+**Lovable app (ResumeScreen)**
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+1. Candidate submits:
+   - `full_name`
+   - `email`
+   - `job_description`
+   - `resume` (PDF, up to 8 MB)
+2. Lovable POSTs this data (multipart/form-data) to an n8n **Webhook**.
 
-Follow these steps:
+**n8n workflow**
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+Nodes (simplified):
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+1. **Webhook – Lovable Integration**  
+2. **Edit Fields2** – normalize incoming fields  
+3. **Move Binary to Data** – prepare resume file  
+4. **Extract Resume Text** – extract text from PDF  
+5. **Merge** – combine resume text with form fields (Merge by Position)  
+6. **Edit Fields** – final input object:
+   - `resume_text`
+   - `job_description`
+   - `email`
+   - `full_name`
+7. **Resume Screening Agent (AI Agent node)**
+   - Chat Model: OpenAI / Gemini / Groq
+   - Prompt:
 
-# Step 3: Install the necessary dependencies.
-npm i
+     ```
+     JOB DESCRIPTION:
+     {{ $json.job_description }}
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
-```
+     CANDIDATE RESUME:
+     {{ $json.resume_text }}
+     ```
 
-**Edit a file directly in GitHub**
+   - Structured Output Parser schema:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+     ```
+     {
+       "type": "object",
+       "properties": {
+         "overall_score": { "type": "number" },
+         "confidence": { "type": "number" },
+         "summary": { "type": "string" },
+         "strengths": { "type": "array", "items": { "type": "string" } },
+         "matched_skills": { "type": "array", "items": { "type": "string" } },
+         "gaps": { "type": "array", "items": { "type": "string" } },
+         "recommended_next_steps": {
+           "type": "array",
+           "items": { "type": "string" }
+         },
+         "years_relevant_experience": { "type": "number" },
+         "recommendation": {
+           "type": "string",
+           "enum": ["interview", "reject"]
+         },
+         "short_reason": { "type": "string" }
+       },
+       "required": [
+         "overall_score",
+         "confidence",
+         "summary",
+         "strengths",
+         "matched_skills",
+         "gaps",
+         "recommended_next_steps",
+         "years_relevant_experience",
+         "recommendation",
+         "short_reason"
+       ],
+       "additionalProperties": false
+     }
+     ```
 
-**Use GitHub Codespaces**
+8. **Return AI Results to Lovable** – Webhook response:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
