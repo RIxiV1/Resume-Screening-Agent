@@ -55,15 +55,16 @@ export function validatePdfFile(file: File): { valid: boolean; error?: string } 
   return { valid: true };
 }
 
-// Response schema from n8n webhook or AI fallback
+// Response schema from n8n webhook
 export const screeningResultSchema = z.object({
   overall_score: z.number().min(0).max(100),
-  verdict: z.enum(["Interview", "Hold", "Reject"]),
-  confidence: z.number().min(0).max(1),
-  matched_skills: z.array(z.string()),
-  years_relevant_experience: z.number(),
+  verdict: z.string(),
   short_reason: z.string(),
   recommended_next_steps: z.string(),
+  // Optional fields from n8n
+  confidence: z.number().min(0).max(1).optional(),
+  matched_skills: z.array(z.string()).optional(),
+  years_relevant_experience: z.number().optional(),
   calendar_link: z.string().optional(),
   email_draft: z.string().optional(),
 });

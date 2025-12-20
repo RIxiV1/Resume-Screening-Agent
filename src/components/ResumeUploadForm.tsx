@@ -17,7 +17,7 @@ import {
 } from '@/lib/validations';
 import { cn } from '@/lib/utils';
 
-const EDGE_FUNCTION_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/screen-resume`;
+const N8N_WEBHOOK_URL = 'https://suhaibbb.app.n8n.cloud/webhook/screen-resume';
 
 type SubmitState = 'idle' | 'submitting' | 'success' | 'error';
 
@@ -68,9 +68,9 @@ export function ResumeUploadForm() {
       formData.append('Full Name', data.fullName);
       formData.append('job_description', data.jobDescription);
 
-      console.log('Submitting to edge function:', EDGE_FUNCTION_URL);
+      console.log('Submitting to n8n webhook:', N8N_WEBHOOK_URL);
 
-      const response = await fetch(EDGE_FUNCTION_URL, {
+      const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         body: formData,
       });
