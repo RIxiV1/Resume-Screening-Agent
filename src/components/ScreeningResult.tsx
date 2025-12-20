@@ -104,9 +104,11 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
               {verdictConfig.label}
             </span>
           </div>
-          <p className="text-muted-foreground text-sm">
-            Confidence: {Math.round(result.confidence * 100)}%
-          </p>
+          {result.confidence !== undefined && (
+            <p className="text-muted-foreground text-sm">
+              Confidence: {Math.round(result.confidence * 100)}%
+            </p>
+          )}
         </div>
       </div>
 
@@ -125,51 +127,53 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
         </div>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Experience */}
-        <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="p-2 bg-accent/10 rounded-lg">
-              <Briefcase className="w-5 h-5 text-accent" />
+      {/* Stats Grid - Only show if data exists */}
+      {(result.years_relevant_experience !== undefined || (result.matched_skills && result.matched_skills.length > 0)) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Experience */}
+          {result.years_relevant_experience !== undefined && (
+            <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
+              <div className="flex items-center gap-3 mb-2">
+                <div className="p-2 bg-accent/10 rounded-lg">
+                  <Briefcase className="w-5 h-5 text-accent" />
+                </div>
+                <h3 className="font-semibold text-foreground">Experience</h3>
+              </div>
+              <p className="text-2xl font-bold text-foreground">
+                {result.years_relevant_experience} <span className="text-base font-normal text-muted-foreground">years</span>
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">Relevant experience</p>
             </div>
-            <h3 className="font-semibold text-foreground">Experience</h3>
-          </div>
-          <p className="text-2xl font-bold text-foreground">
-            {result.years_relevant_experience} <span className="text-base font-normal text-muted-foreground">years</span>
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">Relevant experience</p>
-        </div>
+          )}
 
-        {/* Matched Skills */}
-        <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="p-2 bg-success/10 rounded-lg">
-              <TrendingUp className="w-5 h-5 text-success" />
+          {/* Matched Skills */}
+          {result.matched_skills && result.matched_skills.length > 0 && (
+            <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-success/10 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-success" />
+                </div>
+                <h3 className="font-semibold text-foreground">Matched Skills</h3>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {result.matched_skills.slice(0, 6).map((skill, index) => (
+                  <span
+                    key={index}
+                    className="px-2.5 py-1 text-xs font-medium bg-success/10 text-success rounded-full"
+                  >
+                    {skill}
+                  </span>
+                ))}
+                {result.matched_skills.length > 6 && (
+                  <span className="px-2.5 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full">
+                    +{result.matched_skills.length - 6} more
+                  </span>
+                )}
+              </div>
             </div>
-            <h3 className="font-semibold text-foreground">Matched Skills</h3>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {result.matched_skills.length > 0 ? (
-              result.matched_skills.slice(0, 6).map((skill, index) => (
-                <span
-                  key={index}
-                  className="px-2.5 py-1 text-xs font-medium bg-success/10 text-success rounded-full"
-                >
-                  {skill}
-                </span>
-              ))
-            ) : (
-              <span className="text-sm text-muted-foreground">No skills matched</span>
-            )}
-            {result.matched_skills.length > 6 && (
-              <span className="px-2.5 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full">
-                +{result.matched_skills.length - 6} more
-              </span>
-            )}
-          </div>
+          )}
         </div>
-      </div>
+      )}
 
       {/* Next Steps */}
       <div className="p-5 bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl border border-primary/20">
