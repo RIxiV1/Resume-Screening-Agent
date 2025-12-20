@@ -1,7 +1,7 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Send, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Loader2, Send, AlertCircle, CheckCircle2, Mail } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,11 +11,17 @@ import { ScreeningResult } from './ScreeningResult';
 import { 
   resumeFormSchema, 
   ResumeFormData, 
-  screeningResultSchema,
-  ScreeningResult as ScreeningResultType,
   getErrorMessage 
 } from '@/lib/validations';
+import { 
+  parseN8nResponse, 
+  ScreeningResult as ScreeningResultType,
+  shouldSendInterviewInvitation,
+  shouldSendRejectionEmail
+} from '@/lib/n8nResponseMapper';
 import { cn } from '@/lib/utils';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const N8N_WEBHOOK_URL = 'https://suhaibbb.app.n8n.cloud/webhook/screen-resume';
 
@@ -27,12 +33,15 @@ export function ResumeUploadForm() {
   const [submitState, setSubmitState] = useState<SubmitState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [screeningResult, setScreeningResult] = useState<ScreeningResultType | null>(null);
+  const [emailSent, setEmailSent] = useState(false);
+  const emailSentRef = useRef(false);
 
   const {
     register,
     handleSubmit,
     formState: { errors, isValid },
     reset,
+    getValues,
   } = useForm<ResumeFormData>({
     resolver: zodResolver(resumeFormSchema),
     mode: 'onChange',
@@ -48,8 +57,58 @@ export function ResumeUploadForm() {
     if (screeningResult) {
       setScreeningResult(null);
       setSubmitState('idle');
+      setEmailSent(false);
+      emailSentRef.current = false;
     }
   }, [screeningResult]);
+
+  const sendCandidateEmail = async (
+    candidateName: string,
+    candidateEmail: string,
+    result: ScreeningResultType
+  ) => {
+    // Prevent duplicate email sends
+    if (emailSentRef.current) {
+      console.log('Email already sent, skipping...');
+      return;
+    }
+    emailSentRef.current = true;
+
+    try {
+      const { data, error } = await supabase.functions.invoke('send-candidate-email', {
+        body: {
+          candidateName,
+          candidateEmail,
+          result: {
+            overall_score: result.overall_score,
+            verdict: result.verdict,
+            normalizedVerdict: result.normalizedVerdict,
+            short_reason: result.short_reason,
+            recommended_next_steps: result.recommended_next_steps,
+          },
+        },
+      });
+
+      if (error) {
+        console.error('Failed to send email:', error);
+        toast.error('Failed to send candidate notification email');
+        emailSentRef.current = false;
+        return;
+      }
+
+      console.log('Email sent successfully:', data);
+      setEmailSent(true);
+      
+      if (shouldSendInterviewInvitation(result)) {
+        toast.success('Interview invitation email sent to candidate');
+      } else if (shouldSendRejectionEmail(result)) {
+        toast.info('Application status email sent to candidate');
+      }
+    } catch (err) {
+      console.error('Error sending email:', err);
+      emailSentRef.current = false;
+    }
+  };
 
   const onSubmit = async (data: ResumeFormData) => {
     if (!file) {
@@ -60,8 +119,11 @@ export function ResumeUploadForm() {
     setSubmitState('submitting');
     setErrorMessage(null);
     setScreeningResult(null);
+    setEmailSent(false);
+    emailSentRef.current = false;
 
     try {
+      // Build FormData with exact field names n8n expects
       const formData = new FormData();
       formData.append('Resume_PDF_only_', file);
       formData.append('Email Address', data.email);
@@ -69,11 +131,20 @@ export function ResumeUploadForm() {
       formData.append('job_description', data.jobDescription);
 
       console.log('Submitting to n8n webhook:', N8N_WEBHOOK_URL);
+      console.log('Form data fields:', {
+        'Resume_PDF_only_': file.name,
+        'Email Address': data.email,
+        'Full Name': data.fullName,
+        'job_description': data.jobDescription.substring(0, 100) + '...',
+      });
 
       const response = await fetch(N8N_WEBHOOK_URL, {
         method: 'POST',
         body: formData,
       });
+
+      console.log('Response status:', response.status);
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
 
       // Handle specific error codes
       if (response.status === 429) {
@@ -86,56 +157,60 @@ export function ResumeUploadForm() {
 
       if (!response.ok) {
         const errorText = await response.text().catch(() => '');
-        let errorMessage = `Server responded with status ${response.status}`;
+        let errMsg = `Server responded with status ${response.status}`;
         try {
           const errorData = JSON.parse(errorText);
-          if (errorData.error) errorMessage = errorData.error;
+          if (errorData.error) errMsg = errorData.error;
+          if (errorData.message) errMsg = errorData.message;
         } catch {
-          if (errorText) errorMessage = errorText;
+          if (errorText && errorText.length < 200) errMsg = errorText;
         }
-        throw new Error(errorMessage);
+        throw new Error(errMsg);
       }
 
-      // Get response as text first to handle empty responses
+      // Get response as text first to handle empty or malformed responses
       const responseText = await response.text();
-      console.log('Raw response:', responseText);
+      console.log('Raw response text:', responseText);
 
       if (!responseText || responseText.trim() === '') {
-        throw new Error('The screening service returned an empty response. Please try again.');
+        throw new Error('The screening service returned an empty response. The n8n workflow may still be processing. Please wait a moment and try again.');
       }
 
-      let responseData;
+      let responseData: unknown;
       try {
         responseData = JSON.parse(responseText);
-      } catch {
+      } catch (parseError) {
         console.error('Failed to parse response as JSON:', responseText);
-        throw new Error('The screening service returned an invalid response format.');
+        throw new Error(`Invalid JSON response from screening service: ${responseText.substring(0, 100)}`);
       }
 
       console.log('Parsed response:', responseData);
 
-      // Check for error in response
-      if (responseData.error) {
-        throw new Error(responseData.error);
+      // Check for error in response body
+      if (typeof responseData === 'object' && responseData !== null && 'error' in responseData) {
+        throw new Error((responseData as { error: string }).error);
       }
 
-      // Handle if n8n returns an array (take first item)
-      const resultData = Array.isArray(responseData) ? responseData[0] : responseData;
-
-      // Validate response against schema
-      const parseResult = screeningResultSchema.safeParse(resultData);
+      // Parse and validate using centralized mapper
+      const parseResult = parseN8nResponse(responseData);
       
       if (!parseResult.success) {
-        console.error('Invalid response schema:', parseResult.error.issues);
-        console.error('Received data:', resultData);
-        throw new Error('Analysis failed — the screening service returned an unexpected response format.');
+        throw new Error((parseResult as { success: false; error: string }).error);
       }
 
-      setScreeningResult(parseResult.data);
+      const result = (parseResult as { success: true; data: ScreeningResultType }).data;
+      setScreeningResult(result);
       setSubmitState('success');
+
+      // Send email based on verdict (async, non-blocking)
+      if (shouldSendInterviewInvitation(result) || shouldSendRejectionEmail(result)) {
+        sendCandidateEmail(data.fullName, data.email, result);
+      }
+
     } catch (error) {
       console.error('Submission error:', error);
-      setErrorMessage(getErrorMessage(error));
+      const errMsg = error instanceof Error ? error.message : getErrorMessage(error);
+      setErrorMessage(errMsg);
       setSubmitState('error');
     }
   };
@@ -147,6 +222,8 @@ export function ResumeUploadForm() {
     setSubmitState('idle');
     setErrorMessage(null);
     setScreeningResult(null);
+    setEmailSent(false);
+    emailSentRef.current = false;
   };
 
   return (
@@ -236,9 +313,9 @@ export function ResumeUploadForm() {
           <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg animate-fade-in">
             <div className="flex items-start gap-3">
               <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
-              <div>
+              <div className="flex-1">
                 <p className="text-sm font-medium text-destructive">Submission Failed</p>
-                <p className="text-sm text-destructive/80 mt-1">{errorMessage}</p>
+                <p className="text-sm text-destructive/80 mt-1 break-words">{errorMessage}</p>
               </div>
             </div>
           </div>
@@ -295,7 +372,15 @@ export function ResumeUploadForm() {
       {/* Screening Result */}
       {screeningResult && (
         <div className="mt-10 pt-10 border-t border-border">
-          <h2 className="text-xl font-semibold text-foreground mb-6">Screening Results</h2>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-xl font-semibold text-foreground">Screening Results</h2>
+            {emailSent && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Mail className="w-4 h-4" />
+                <span>Email sent</span>
+              </div>
+            )}
+          </div>
           <ScreeningResult result={screeningResult} />
         </div>
       )}

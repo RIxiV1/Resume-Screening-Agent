@@ -55,22 +55,6 @@ export function validatePdfFile(file: File): { valid: boolean; error?: string } 
   return { valid: true };
 }
 
-// Response schema from n8n webhook
-export const screeningResultSchema = z.object({
-  overall_score: z.number().min(0).max(100),
-  verdict: z.string(),
-  short_reason: z.string(),
-  recommended_next_steps: z.string(),
-  // Optional fields from n8n
-  confidence: z.number().min(0).max(1).optional(),
-  matched_skills: z.array(z.string()).optional(),
-  years_relevant_experience: z.number().optional(),
-  calendar_link: z.string().optional(),
-  email_draft: z.string().optional(),
-});
-
-export type ScreeningResult = z.infer<typeof screeningResultSchema>;
-
 // Error message mapping
 export function getErrorMessage(error: unknown): string {
   if (error instanceof Error) {
@@ -84,13 +68,16 @@ export function getErrorMessage(error: unknown): string {
       return "Please re-upload your resume using the upload button (PDF required).";
     }
     
-    if (msg.includes('referenced node') || msg.includes('cannot read properties') || msg.includes('json.parse')) {
+    if (msg.includes('referenced node') || msg.includes('cannot read properties')) {
       return "Temporary processing error — please try again in a few moments.";
     }
     
     if (msg.includes('mail delivery') || msg.includes('email bounce')) {
       return "We attempted to send you an email but it failed. Please check the email address or contact support.";
     }
+    
+    // Return the original message if no pattern matches
+    return error.message;
   }
   
   return "An unexpected error occurred. Please try again.";

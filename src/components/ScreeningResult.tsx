@@ -1,4 +1,4 @@
-import { ScreeningResult as ScreeningResultType } from '@/lib/validations';
+import { ScreeningResult as ScreeningResultType } from '@/lib/n8nResponseMapper';
 import { CheckCircle2, XCircle, Clock, Target, Briefcase, Lightbulb, TrendingUp, Calendar, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
@@ -11,8 +11,8 @@ interface ScreeningResultProps {
 export function ScreeningResult({ result }: ScreeningResultProps) {
   const [showEmailDraft, setShowEmailDraft] = useState(false);
 
-  const getVerdictConfig = (verdict: string) => {
-    switch (verdict) {
+  const getVerdictConfig = (normalizedVerdict: string) => {
+    switch (normalizedVerdict) {
       case 'Interview':
         return {
           icon: CheckCircle2,
@@ -43,12 +43,12 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
           color: 'text-muted-foreground',
           bgColor: 'bg-muted',
           borderColor: 'border-border',
-          label: verdict,
+          label: result.verdict,
         };
     }
   };
 
-  const verdictConfig = getVerdictConfig(result.verdict);
+  const verdictConfig = getVerdictConfig(result.normalizedVerdict);
   const VerdictIcon = verdictConfig.icon;
 
   const getScoreColor = (score: number) => {
@@ -104,9 +104,9 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
               {verdictConfig.label}
             </span>
           </div>
-          {result.confidence !== undefined && (
+          {result.confidence > 0 && (
             <p className="text-muted-foreground text-sm">
-              Confidence: {Math.round(result.confidence * 100)}%
+              Confidence: {result.confidence}%
             </p>
           )}
         </div>
@@ -121,17 +121,17 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
           <div>
             <h3 className="font-semibold text-foreground mb-1">Summary</h3>
             <p className="text-muted-foreground text-sm leading-relaxed">
-              {result.short_reason}
+              {result.summary}
             </p>
           </div>
         </div>
       </div>
 
       {/* Stats Grid - Only show if data exists */}
-      {(result.years_relevant_experience !== undefined || (result.matched_skills && result.matched_skills.length > 0)) && (
+      {(result.years_relevant_experience > 0 || result.matched_skills.length > 0) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Experience */}
-          {result.years_relevant_experience !== undefined && (
+          {result.years_relevant_experience > 0 && (
             <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
               <div className="flex items-center gap-3 mb-2">
                 <div className="p-2 bg-accent/10 rounded-lg">
@@ -147,7 +147,7 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
           )}
 
           {/* Matched Skills */}
-          {result.matched_skills && result.matched_skills.length > 0 && (
+          {result.matched_skills.length > 0 && (
             <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-success/10 rounded-lg">
@@ -176,17 +176,26 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
       )}
 
       {/* Next Steps */}
-      <div className="p-5 bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl border border-primary/20">
-        <h3 className="font-semibold text-foreground mb-2">Recommended Next Steps</h3>
-        <p className="text-muted-foreground text-sm leading-relaxed">
-          {result.recommended_next_steps}
-        </p>
-      </div>
+      {result.recommended_next_steps.length > 0 && (
+        <div className="p-5 bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl border border-primary/20">
+          <h3 className="font-semibold text-foreground mb-3">Recommended Next Steps</h3>
+          <ul className="space-y-2">
+            {result.recommended_next_steps.map((step, index) => (
+              <li key={index} className="flex items-start gap-2 text-muted-foreground text-sm">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-medium flex items-center justify-center mt-0.5">
+                  {index + 1}
+                </span>
+                <span className="leading-relaxed">{step}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Calendar Link & Email Draft (Bonus Features) */}
       {(result.calendar_link || result.email_draft) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {result.calendar_link && result.verdict === 'Interview' && (
+          {result.calendar_link && result.normalizedVerdict === 'Interview' && (
             <a
               href={result.calendar_link}
               target="_blank"
