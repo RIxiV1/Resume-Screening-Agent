@@ -1,12 +1,16 @@
 import { ScreeningResult as ScreeningResultType } from '@/lib/validations';
-import { CheckCircle2, XCircle, Clock, Target, Briefcase, Lightbulb, TrendingUp } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Target, Briefcase, Lightbulb, TrendingUp, Calendar, Mail } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useState } from 'react';
+import { Button } from './ui/button';
 
 interface ScreeningResultProps {
   result: ScreeningResultType;
 }
 
 export function ScreeningResult({ result }: ScreeningResultProps) {
+  const [showEmailDraft, setShowEmailDraft] = useState(false);
+
   const getVerdictConfig = (verdict: string) => {
     switch (verdict) {
       case 'Interview':
@@ -51,12 +55,6 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
     if (score >= 70) return 'text-success';
     if (score >= 40) return 'text-warning';
     return 'text-destructive';
-  };
-
-  const getScoreGradient = (score: number) => {
-    if (score >= 70) return 'from-success to-success/70';
-    if (score >= 40) return 'from-warning to-warning/70';
-    return 'from-destructive to-destructive/70';
   };
 
   return (
@@ -180,6 +178,65 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
           {result.recommended_next_steps}
         </p>
       </div>
+
+      {/* Calendar Link & Email Draft (Bonus Features) */}
+      {(result.calendar_link || result.email_draft) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {result.calendar_link && result.verdict === 'Interview' && (
+            <a
+              href={result.calendar_link}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border shadow-soft-sm hover:border-primary/30 hover:shadow-soft-md transition-all"
+            >
+              <div className="p-2.5 bg-primary/10 rounded-lg flex-shrink-0">
+                <Calendar className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground text-sm">Schedule Interview</p>
+                <p className="text-xs text-muted-foreground">Book a time slot</p>
+              </div>
+            </a>
+          )}
+          
+          {result.email_draft && (
+            <button
+              onClick={() => setShowEmailDraft(!showEmailDraft)}
+              className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border shadow-soft-sm hover:border-primary/30 hover:shadow-soft-md transition-all text-left"
+            >
+              <div className="p-2.5 bg-accent/10 rounded-lg flex-shrink-0">
+                <Mail className="w-5 h-5 text-accent" />
+              </div>
+              <div>
+                <p className="font-medium text-foreground text-sm">Email Draft</p>
+                <p className="text-xs text-muted-foreground">
+                  {showEmailDraft ? 'Hide draft' : 'View suggested email'}
+                </p>
+              </div>
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Email Draft Content */}
+      {showEmailDraft && result.email_draft && (
+        <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm animate-fade-in">
+          <h4 className="font-semibold text-foreground mb-3">Suggested Email to Candidate</h4>
+          <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed bg-muted/50 p-4 rounded-lg">
+            {result.email_draft}
+          </pre>
+          <Button
+            variant="outline"
+            size="sm"
+            className="mt-3"
+            onClick={() => {
+              navigator.clipboard.writeText(result.email_draft || '');
+            }}
+          >
+            Copy to Clipboard
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

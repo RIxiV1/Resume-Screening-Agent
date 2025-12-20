@@ -55,7 +55,7 @@ export function validatePdfFile(file: File): { valid: boolean; error?: string } 
   return { valid: true };
 }
 
-// Response schema from n8n webhook
+// Response schema from n8n webhook or AI fallback
 export const screeningResultSchema = z.object({
   overall_score: z.number().min(0).max(100),
   verdict: z.enum(["Interview", "Hold", "Reject"]),
@@ -64,6 +64,8 @@ export const screeningResultSchema = z.object({
   years_relevant_experience: z.number(),
   short_reason: z.string(),
   recommended_next_steps: z.string(),
+  calendar_link: z.string().optional(),
+  email_draft: z.string().optional(),
 });
 
 export type ScreeningResult = z.infer<typeof screeningResultSchema>;
