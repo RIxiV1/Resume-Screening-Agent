@@ -1,0 +1,340 @@
+{
+  "name": "AI-Powered Resume Screening and Candidate Evaluation System",
+  "nodes": [
+    {
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "Resume_PDF_only_",
+        "options": {}
+      },
+      "id": "7364d4a7-483a-454d-acfe-20c4c7ecad5e",
+      "name": "Extract Resume Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.1,
+      "position": [
+        -4800,
+        1856
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=JOB DESCRIPTION:\n{{ $json.job_description || $json.jd }}\n\nCANDIDATE RESUME:\n{{ $json.resume_text }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Return ONLY a valid JSON object.\nDo not include markdown, explanations, or extra text.\n\nAlways include ALL keys.\nAlways include arrays (use empty arrays if needed).\nUse numbers for numeric fields.\nUse lowercase enum values exactly.\n\nIf resume_text is empty:\n- overall_score = 0\n- confidence = 0\n- strengths = []\n- gaps = []\n- experience_years = 0\n- recommendation = \"reject\"\n- short_reason = \"Resume text is empty\"\n"
+        }
+      },
+      "id": "bf804e13-9328-4f5c-93d9-2cce3cb9c2de",
+      "name": "Resume Screening Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        -4128,
+        1784
+      ],
+      "alwaysOutputData": false,
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfor (const item of items) {\n  // The form stores files in a nested structure\n  // We need to extract the binary data and move it to the root level\n  \n  // Check if there's binary data in the input\n  if (item.binary && Object.keys(item.binary).length > 0) {\n    // Get the first binary key (the file field name)\n    const binaryKey = Object.keys(item.binary)[0];\n    const binaryData = item.binary[binaryKey];\n    \n    // Move it to Resume_PDF_only_ for the Extract node\n    item.binary = {\n      Resume_PDF_only_: binaryData\n    };\n  }\n}\n\nreturn items;"
+      },
+      "id": "8a890536-927d-4100-9c98-d7f984b0e4e9",
+      "name": "Move Binary to Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -5024,
+        1856
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "screen-resume",
+        "responseMode": "responseNode",
+        "options": {
+          "binaryPropertyName": "Resume_PDF_only_"
+        }
+      },
+      "id": "2ebabc13-f511-4605-856c-445743fee5d9",
+      "name": "Webhook - Lovable Integration",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -5472,
+        1784
+      ],
+      "webhookId": "fdcabc00-0eb2-4478-87cb-5d35dd32f1db"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={\n  \"overall_score\": {{ $json.output.overall_score ?? 0 }},\n  \"verdict\": \"{{ $json.output.recommendation ?? 'reject' }}\",\n  \"confidence\": {{ $json.output.confidence ?? 0 }},\n  \"matched_skills\": {{ JSON.stringify($json.output.matched_skills ?? []) }},\n  \"years_relevant_experience\": {{ $json.output.years_relevant_experience ?? 0 }},\n  \"short_reason\": \"{{ $json.output.short_reason ?? 'No summary available.' }}\",\n  \"recommended_next_steps\": {{ JSON.stringify($json.output.recommended_next_steps ?? []) }}\n}\n",
+        "options": {}
+      },
+      "id": "5c0dd893-0f16-47bb-91e3-47b28b86527b",
+      "name": "Return AI Results to Lovable",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        -3776,
+        1784
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "87676196-e716-4e1e-accd-04accd2eebed",
+              "name": "=resume_text",
+              "value": "={{ $json.text }}",
+              "type": "string"
+            },
+            {
+              "id": "ae44a733-1db0-480f-8797-114565527850",
+              "name": "job_description",
+              "value": "={{ $json.job_description }}",
+              "type": "string"
+            },
+            {
+              "id": "73159ba2-f726-4d9d-903d-0276560fe042",
+              "name": "email",
+              "value": "={{ $json.body[\"Email Address\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "c029b6ae-9a5d-4b4c-bbdd-4c36e59e9773",
+              "name": "full_name",
+              "value": "={{ $json.full_name }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": "",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -4352,
+        1784
+      ],
+      "id": "c8bf41f8-ca66-42cb-8c65-d587f3a15315",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "beac608f-1008-4790-abfd-aed848149c81",
+              "name": "email",
+              "value": "={{ $json.body[\"Email Address\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "1f2cfc2b-95d6-463c-8a56-b4f0ff66e25e",
+              "name": "full_name",
+              "value": "={{ $json.body[\"Full Name\"] }}",
+              "type": "string"
+            },
+            {
+              "id": "eed39a40-c52e-4d37-926b-c5cdea462f4c",
+              "name": "job_description",
+              "value": "={{ $json.body.job_description }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -5248,
+        1784
+      ],
+      "id": "3fbf79fd-35b2-46aa-b8e8-cafbf1457115",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"overall_score\": { \"type\": \"number\" },\n    \"confidence\": { \"type\": \"number\" },\n\n    \"summary\": { \"type\": \"string\" },\n\n    \"strengths\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n\n    \"matched_skills\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n\n    \"gaps\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n\n    \"recommended_next_steps\": {\n      \"type\": \"array\",\n      \"items\": { \"type\": \"string\" }\n    },\n\n    \"experience_years\": { \"type\": \"number\" },\n\n    \"recommendation\": {\n      \"type\": \"string\",\n      \"enum\": [\"interview\", \"reject\"]\n    },\n\n    \"short_reason\": { \"type\": \"string\" }\n  },\n  \"required\": [\n    \"overall_score\",\n    \"confidence\",\n    \"summary\",\n    \"strengths\",\n    \"matched_skills\",\n    \"gaps\",\n    \"recommended_next_steps\",\n    \"experience_years\",\n    \"recommendation\",\n    \"short_reason\"\n  ],\n  \"additionalProperties\": false\n}\n"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        -3992,
+        2008
+      ],
+      "id": "f125810c-f4e2-45ce-a88d-373f1d475598",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineByPosition",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        -4576,
+        1784
+      ],
+      "id": "e90d131a-e31a-4aae-82d0-38cd0700ff68",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        -4272,
+        2000
+      ],
+      "id": "43630ed5-ab69-439d-b257-dce0f7217a20",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "25pb9cKxBS4kbsPW",
+          "name": "n8n free OpenAI API credits"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Extract Resume Text": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Binary to Data": {
+      "main": [
+        [
+          {
+            "node": "Extract Resume Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Screening Agent": {
+      "main": [
+        [
+          {
+            "node": "Return AI Results to Lovable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook - Lovable Integration": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Resume Screening Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Move Binary to Data",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "Resume Screening Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Resume Screening Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "timeSavedMode": "fixed",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": true
+  },
+  "versionId": "a89fe0f6-42fb-4ebb-8d00-0382bb499e4e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "9d1483994e73194ca497de09a53d6935c5de201b5a9a8d7cf2f89c2330317aaf"
+  },
+  "id": "ES9HKzSxLICgIc86",
+  "tags": []
+}
