@@ -1,114 +1,83 @@
-# 🤖 AI-Powered Resume Screening Agent
+# ResumeScreen – AI Resume Screening Agent
 
-ResumeScreen is an end-to-end AI resume screening system built with:
+This project is a simple AI-powered resume screener built with **n8n** and **Lovable**.
 
-- [n8n](https://n8n.io) for workflow automation
-- [Lovable](https://lovable.dev) for the candidate-facing web app
-- An LLM (Gemini / OpenAI / Groq) for resume–JD matching
+Candidates upload a PDF resume and paste a job description. The system:
 
-It lets candidates upload a resume + job description and instantly returns a score, summary, strengths, gaps, and suggested next steps. HR can then choose to send interview or rejection emails automatically.
-
----
-
-## ✨ Features
-
-- 📥 Candidate web form (Lovable) with:
-  - Full name, email
-  - Job description text
-  - Resume PDF upload
-- ⚙️ n8n workflow that:
-  - Extracts text from PDF resumes
-  - Merges resume + JD + candidate metadata
-  - Calls an AI Agent to score the candidate from 0–100
-  - Returns structured JSON back to Lovable
-- 📊 Structured output:
-  - `overall_score`
-  - `confidence`
-  - `summary`
-  - `strengths`
-  - `matched_skills`
-  - `years_relevant_experience`
-  - `short_reason`
-  - `recommended_next_steps`
-- 📧 Optional: sends interview / rejection emails based on the AI verdict
+1. Extracts text from the resume.
+2. Sends the resume + JD to an AI model.
+3. Returns a score and summary.
+4. (Optionally) sends interview or rejection emails.
 
 ---
 
-## 🧱 Architecture
+## How it works
 
-**Lovable app (ResumeScreen)**
+### 1. Lovable app
 
-1. Candidate submits:
-   - `full_name`
-   - `email`
-   - `job_description`
-   - `resume` (PDF, up to 8 MB)
-2. Lovable POSTs this data (multipart/form-data) to an n8n **Webhook**.
+- Form fields:
+  - Full Name
+  - Email Address
+  - Job Description (text area)
+  - Resume (PDF upload)
+- On submit, Lovable calls an **n8n Webhook** and waits for the JSON response.
+- The Screening Results page shows:
+  - Score
+  - Confidence
+  - Summary
+  - Experience (years)
+  - Matched skills
+  - Recommended next steps
 
-**n8n workflow**
-
-Nodes (simplified):
+### 2. n8n workflow (high level)
 
 1. **Webhook – Lovable Integration**  
-2. **Edit Fields2** – normalize incoming fields  
-3. **Move Binary to Data** – prepare resume file  
-4. **Extract Resume Text** – extract text from PDF  
-5. **Merge** – combine resume text with form fields (Merge by Position)  
-6. **Edit Fields** – final input object:
+2. **Move Binary to Data** – prepare resume file  
+3. **Extract Resume Text** – get text from PDF  
+4. **Merge + Edit Fields** – build a clean object with:
    - `resume_text`
    - `job_description`
    - `email`
    - `full_name`
-7. **Resume Screening Agent (AI Agent node)**
-   - Chat Model: OpenAI / Gemini / Groq
-   - Prompt:
-
-     ```
-     JOB DESCRIPTION:
-     {{ $json.job_description }}
-
-     CANDIDATE RESUME:
-     {{ $json.resume_text }}
-     ```
-
-   - Structured Output Parser schema:
+5. **Resume Screening Agent (AI Agent node)**  
+   - Uses a chat model (OpenAI / Gemini / Groq).  
+   - Prompt includes the JD and the resume text.  
+   - Structured output with fields like:
+     - `overall_score`
+     - `confidence`
+     - `summary`
+     - `strengths`
+     - `matched_skills`
+     - `years_relevant_experience`
+     - `recommendation` (`interview` or `reject`)
+     - `short_reason`
+     - `recommended_next_steps`
+6. **Return AI Results to Lovable**  
+   - Responds with JSON:
 
      ```
      {
-       "type": "object",
-       "properties": {
-         "overall_score": { "type": "number" },
-         "confidence": { "type": "number" },
-         "summary": { "type": "string" },
-         "strengths": { "type": "array", "items": { "type": "string" } },
-         "matched_skills": { "type": "array", "items": { "type": "string" } },
-         "gaps": { "type": "array", "items": { "type": "string" } },
-         "recommended_next_steps": {
-           "type": "array",
-           "items": { "type": "string" }
-         },
-         "years_relevant_experience": { "type": "number" },
-         "recommendation": {
-           "type": "string",
-           "enum": ["interview", "reject"]
-         },
-         "short_reason": { "type": "string" }
-       },
-       "required": [
-         "overall_score",
-         "confidence",
-         "summary",
-         "strengths",
-         "matched_skills",
-         "gaps",
-         "recommended_next_steps",
-         "years_relevant_experience",
-         "recommendation",
-         "short_reason"
-       ],
-       "additionalProperties": false
+       "overall_score": 92,
+       "verdict": "interview",
+       "confidence": 94,
+       "matched_skills": ["Developer Relations", "React", "Next.js"],
+       "years_relevant_experience": 3,
+       "short_reason": "Strong match for the role.",
+       "recommended_next_steps": ["Invite for interview", "Share take-home task"]
      }
      ```
 
-8. **Return AI Results to Lovable** – Webhook response:
+7. _(Optional)_ IF + Gmail nodes to send:
+   - Interview email when `verdict = "interview"`.
+   - Rejection email otherwise.
 
+---
+
+## Setup (quick)
+
+1. Import the n8n workflow JSON from the `n8n/` folder.  
+2. Set up your Chat Model credentials (OpenAI / Gemini / Groq) in n8n.  
+3. Copy the Webhook URL into the Lovable form action.  
+4. In Lovable, map the response fields (`overall_score`, `summary`, etc.) to the results UI.  
+
+That’s it – submit a resume + JD in the app and you’ll get instant AI screening results.
