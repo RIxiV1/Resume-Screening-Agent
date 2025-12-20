@@ -85,24 +85,50 @@ export function ResumeUploadForm() {
       }
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.error || `Server responded with status ${response.status}`);
+        const errorText = await response.text().catch(() => '');
+        let errorMessage = `Server responded with status ${response.status}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          if (errorData.error) errorMessage = errorData.error;
+        } catch {
+          if (errorText) errorMessage = errorText;
+        }
+        throw new Error(errorMessage);
       }
 
-      const responseData = await response.json();
-      console.log('Screening response:', responseData);
+      // Get response as text first to handle empty responses
+      const responseText = await response.text();
+      console.log('Raw response:', responseText);
+
+      if (!responseText || responseText.trim() === '') {
+        throw new Error('The screening service returned an empty response. Please try again.');
+      }
+
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+      } catch {
+        console.error('Failed to parse response as JSON:', responseText);
+        throw new Error('The screening service returned an invalid response format.');
+      }
+
+      console.log('Parsed response:', responseData);
 
       // Check for error in response
       if (responseData.error) {
         throw new Error(responseData.error);
       }
 
+      // Handle if n8n returns an array (take first item)
+      const resultData = Array.isArray(responseData) ? responseData[0] : responseData;
+
       // Validate response against schema
-      const parseResult = screeningResultSchema.safeParse(responseData);
+      const parseResult = screeningResultSchema.safeParse(resultData);
       
       if (!parseResult.success) {
-        console.error('Invalid response schema:', parseResult.error);
-        throw new Error('Analysis failed — the screening service returned an unexpected response. Try again later.');
+        console.error('Invalid response schema:', parseResult.error.issues);
+        console.error('Received data:', resultData);
+        throw new Error('Analysis failed — the screening service returned an unexpected response format.');
       }
 
       setScreeningResult(parseResult.data);
