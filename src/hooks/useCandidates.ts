@@ -8,6 +8,30 @@ export function useCandidates() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const mapRowToCandidate = (row: any): Candidate => ({
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    role: row.role,
+    score: row.score,
+    verdict: row.verdict as 'interview' | 'reject' | 'hold',
+    submittedAt: new Date(row.created_at).toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    }),
+    avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(row.name)}`,
+    confidence: row.confidence ?? undefined,
+    summary: row.summary ?? undefined,
+    matched_skills: row.matched_skills ?? undefined,
+    years_relevant_experience: row.years_relevant_experience ?? undefined,
+    short_reason: row.short_reason ?? undefined,
+    recommended_next_steps: row.recommended_next_steps ?? undefined,
+    email_draft: row.email_draft ?? undefined,
+    interview_email_sent: row.interview_email_sent,
+    rejection_email_sent: row.rejection_email_sent,
+  });
+
   const fetchCandidates = useCallback(async () => {
     try {
       setLoading(true);
@@ -22,30 +46,7 @@ export function useCandidates() {
         throw fetchError;
       }
 
-      const mappedCandidates: Candidate[] = (data || []).map((row) => ({
-        id: row.id,
-        name: row.name,
-        email: row.email,
-        role: row.role,
-        score: row.score,
-        verdict: row.verdict as 'interview' | 'reject' | 'hold',
-        submittedAt: new Date(row.created_at).toLocaleDateString('en-US', {
-          year: 'numeric',
-          month: 'short',
-          day: 'numeric',
-        }),
-        avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(row.name)}`,
-        confidence: row.confidence ?? undefined,
-        summary: row.summary ?? undefined,
-        matched_skills: row.matched_skills ?? undefined,
-        years_relevant_experience: row.years_relevant_experience ?? undefined,
-        short_reason: row.short_reason ?? undefined,
-        recommended_next_steps: row.recommended_next_steps ?? undefined,
-        email_draft: row.email_draft ?? undefined,
-        interview_email_sent: row.interview_email_sent,
-        rejection_email_sent: row.rejection_email_sent,
-      }));
-
+      const mappedCandidates: Candidate[] = (data || []).map(mapRowToCandidate);
       setCandidates(mappedCandidates);
     } catch (err) {
       console.error('Failed to fetch candidates:', err);
@@ -80,6 +81,56 @@ export function useCandidates() {
 
   useEffect(() => {
     fetchCandidates();
+
+    // Subscribe to real-time updates
+    const channel = supabase
+      .channel('candidates-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'candidates',
+        },
+        (payload) => {
+          console.log('New candidate received:', payload);
+          const newCandidate = mapRowToCandidate(payload.new);
+          setCandidates(prev => [newCandidate, ...prev]);
+          toast.success(`New application from ${newCandidate.name}`);
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'candidates',
+        },
+        (payload) => {
+          console.log('Candidate updated:', payload);
+          const updatedCandidate = mapRowToCandidate(payload.new);
+          setCandidates(prev => prev.map(c => 
+            c.id === updatedCandidate.id ? updatedCandidate : c
+          ));
+        }
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: 'DELETE',
+          schema: 'public',
+          table: 'candidates',
+        },
+        (payload) => {
+          console.log('Candidate deleted:', payload);
+          setCandidates(prev => prev.filter(c => c.id !== (payload.old as any).id));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchCandidates]);
 
   return {
