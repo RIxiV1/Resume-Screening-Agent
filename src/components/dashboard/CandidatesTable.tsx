@@ -11,13 +11,16 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Candidate } from '@/types/candidate';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 interface CandidatesTableProps {
   candidates: Candidate[];
+  onCandidateClick: (candidate: Candidate) => void;
+  onEmailStatusUpdate: (candidateId: string, type: 'interview' | 'rejection') => Promise<void>;
 }
 
-export function CandidatesTable({ candidates }: CandidatesTableProps) {
+export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpdate }: CandidatesTableProps) {
   const [sendingEmail, setSendingEmail] = useState<Record<string, 'interview' | 'rejection' | null>>({});
 
   const getInitials = (name: string) => {
@@ -53,12 +56,36 @@ export function CandidatesTable({ candidates }: CandidatesTableProps) {
     }
   };
 
-  const handleSendEmail = async (candidate: Candidate, type: 'interview' | 'rejection') => {
+  const handleSendEmail = async (
+    e: React.MouseEvent, 
+    candidate: Candidate, 
+    type: 'interview' | 'rejection'
+  ) => {
+    e.stopPropagation(); // Prevent row click
     setSendingEmail((prev) => ({ ...prev, [candidate.id]: type }));
     
-    // Simulate email sending - in production, this would call the edge function
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      const { data, error } = await supabase.functions.invoke('send-candidate-email', {
+        body: {
+          candidateName: candidate.name,
+          candidateEmail: candidate.email,
+          result: {
+            overall_score: candidate.score,
+            verdict: candidate.verdict,
+            normalizedVerdict: candidate.verdict === 'interview' ? 'Interview' : 
+                               candidate.verdict === 'reject' ? 'Reject' : 'Hold',
+            short_reason: candidate.short_reason || '',
+            recommended_next_steps: candidate.recommended_next_steps || [],
+          },
+        },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      // Update the email sent status in the database
+      await onEmailStatusUpdate(candidate.id, type);
       
       toast.success(
         type === 'interview'
@@ -66,6 +93,7 @@ export function CandidatesTable({ candidates }: CandidatesTableProps) {
           : `Rejection email sent to ${candidate.name}`
       );
     } catch (error) {
+      console.error('Failed to send email:', error);
       toast.error('Failed to send email. Please try again.');
     } finally {
       setSendingEmail((prev) => ({ ...prev, [candidate.id]: null }));
@@ -97,12 +125,16 @@ export function CandidatesTable({ candidates }: CandidatesTableProps) {
             {candidates.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No candidates match the current filters.
+                  No candidates found. Submissions will appear here automatically.
                 </TableCell>
               </TableRow>
             ) : (
               candidates.map((candidate) => (
-                <TableRow key={candidate.id}>
+                <TableRow 
+                  key={candidate.id}
+                  className="cursor-pointer"
+                  onClick={() => onCandidateClick(candidate)}
+                >
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <Avatar className="h-10 w-10">
@@ -125,18 +157,34 @@ export function CandidatesTable({ candidates }: CandidatesTableProps) {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => handleSendEmail(candidate, 'interview')}
-                        disabled={sendingEmail[candidate.id] !== undefined && sendingEmail[candidate.id] !== null}
+                        onClick={(e) => handleSendEmail(e, candidate, 'interview')}
+                        disabled={
+                          sendingEmail[candidate.id] !== undefined && 
+                          sendingEmail[candidate.id] !== null ||
+                          candidate.interview_email_sent
+                        }
                       >
-                        {sendingEmail[candidate.id] === 'interview' ? 'Sending...' : 'Send Interview Email'}
+                        {sendingEmail[candidate.id] === 'interview' 
+                          ? 'Sending...' 
+                          : candidate.interview_email_sent 
+                            ? 'Interview Sent'
+                            : 'Send Interview Email'}
                       </Button>
                       <Button
                         variant="destructive"
                         size="sm"
-                        onClick={() => handleSendEmail(candidate, 'rejection')}
-                        disabled={sendingEmail[candidate.id] !== undefined && sendingEmail[candidate.id] !== null}
+                        onClick={(e) => handleSendEmail(e, candidate, 'rejection')}
+                        disabled={
+                          sendingEmail[candidate.id] !== undefined && 
+                          sendingEmail[candidate.id] !== null ||
+                          candidate.rejection_email_sent
+                        }
                       >
-                        {sendingEmail[candidate.id] === 'rejection' ? 'Sending...' : 'Send Rejection Email'}
+                        {sendingEmail[candidate.id] === 'rejection' 
+                          ? 'Sending...' 
+                          : candidate.rejection_email_sent
+                            ? 'Rejection Sent'
+                            : 'Send Rejection Email'}
                       </Button>
                     </div>
                   </TableCell>
