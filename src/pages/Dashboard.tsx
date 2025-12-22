@@ -1,79 +1,40 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { FileSearch } from 'lucide-react';
+import { FileSearch, Loader2 } from 'lucide-react';
 import { CandidateFilters } from '@/components/dashboard/CandidateFilters';
 import { CandidatesTable } from '@/components/dashboard/CandidatesTable';
+import { CandidateDetailModal } from '@/components/dashboard/CandidateDetailModal';
+import { useCandidates } from '@/hooks/useCandidates';
 import { Candidate } from '@/types/candidate';
 
-// Mock data for demonstration
-const mockCandidates: Candidate[] = [
-  {
-    id: '1',
-    name: 'Alice Johnson',
-    email: 'alice@example.com',
-    role: 'Software Engineer - Frontend',
-    score: 87,
-    verdict: 'interview',
-    submittedAt: '2024-07-23',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Alice',
-  },
-  {
-    id: '2',
-    name: 'Bob Williams',
-    email: 'bob@example.com',
-    role: 'Product Manager',
-    score: 62,
-    verdict: 'reject',
-    submittedAt: '2024-07-22',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Bob',
-  },
-  {
-    id: '3',
-    name: 'Charlie Brown',
-    email: 'charlie@example.com',
-    role: 'UI/UX Designer',
-    score: 91,
-    verdict: 'interview',
-    submittedAt: '2024-07-21',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Charlie',
-  },
-  {
-    id: '4',
-    name: 'Diana Miller',
-    email: 'diana@example.com',
-    role: 'Data Scientist',
-    score: 78,
-    verdict: 'interview',
-    submittedAt: '2024-07-20',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Diana',
-  },
-  {
-    id: '5',
-    name: 'Ethan Davis',
-    email: 'ethan@example.com',
-    role: 'Marketing Specialist',
-    score: 55,
-    verdict: 'reject',
-    submittedAt: '2024-07-19',
-    avatarUrl: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Ethan',
-  },
-];
-
 const Dashboard = () => {
-  const [candidates, setCandidates] = useState<Candidate[]>(mockCandidates);
-  const [filteredCandidates, setFilteredCandidates] = useState<Candidate[]>(mockCandidates);
+  const { candidates, loading, error, refetch, updateEmailStatus } = useCandidates();
+  const [roleFilter, setRoleFilter] = useState('');
+  const [minScoreFilter, setMinScoreFilter] = useState(0);
+  const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(null);
+  const [detailModalOpen, setDetailModalOpen] = useState(false);
 
-  const roles = [...new Set(mockCandidates.map((c) => c.role))];
+  const roles = useMemo(() => [...new Set(candidates.map((c) => c.role))], [candidates]);
 
-  const handleApplyFilters = (role: string, minScore: number) => {
+  const filteredCandidates = useMemo(() => {
     let filtered = candidates;
     
-    if (role) {
-      filtered = filtered.filter((c) => c.role === role);
+    if (roleFilter) {
+      filtered = filtered.filter((c) => c.role === roleFilter);
     }
     
-    filtered = filtered.filter((c) => c.score >= minScore);
-    setFilteredCandidates(filtered);
+    filtered = filtered.filter((c) => c.score >= minScoreFilter);
+    return filtered;
+  }, [candidates, roleFilter, minScoreFilter]);
+
+  const handleApplyFilters = (role: string, minScore: number) => {
+    setRoleFilter(role);
+    setMinScoreFilter(minScore);
+  };
+
+  const handleCandidateClick = (candidate: Candidate) => {
+    setSelectedCandidate(candidate);
+    setDetailModalOpen(true);
   };
 
   return (
@@ -107,16 +68,53 @@ const Dashboard = () => {
             HR Review Dashboard
           </h1>
           <p className="text-muted-foreground">
-            Welcome back, Sarah. Review and manage candidate applications efficiently.
+            Review and manage candidate applications efficiently.
           </p>
         </div>
 
-        {/* Filters */}
-        <CandidateFilters roles={roles} onApplyFilters={handleApplyFilters} />
+        {/* Loading State */}
+        {loading && (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="w-8 h-8 animate-spin text-primary" />
+            <span className="ml-3 text-muted-foreground">Loading candidates...</span>
+          </div>
+        )}
 
-        {/* Candidates Table */}
-        <CandidatesTable candidates={filteredCandidates} />
+        {/* Error State */}
+        {error && (
+          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg mb-6">
+            <p className="text-destructive">{error}</p>
+            <button 
+              onClick={refetch}
+              className="mt-2 text-sm text-primary hover:underline"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Content */}
+        {!loading && !error && (
+          <>
+            {/* Filters */}
+            <CandidateFilters roles={roles} onApplyFilters={handleApplyFilters} />
+
+            {/* Candidates Table */}
+            <CandidatesTable 
+              candidates={filteredCandidates} 
+              onCandidateClick={handleCandidateClick}
+              onEmailStatusUpdate={updateEmailStatus}
+            />
+          </>
+        )}
       </main>
+
+      {/* Candidate Detail Modal */}
+      <CandidateDetailModal
+        candidate={selectedCandidate}
+        open={detailModalOpen}
+        onOpenChange={setDetailModalOpen}
+      />
     </div>
   );
 };

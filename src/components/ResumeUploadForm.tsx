@@ -202,6 +202,32 @@ export function ResumeUploadForm() {
       setScreeningResult(result);
       setSubmitState('success');
 
+      // Save candidate to database
+      try {
+        const { error: insertError } = await supabase
+          .from('candidates')
+          .insert({
+            name: data.fullName,
+            email: data.email,
+            role: data.jobDescription.split('\n')[0].substring(0, 100) || 'General Application',
+            score: result.overall_score,
+            verdict: result.normalizedVerdict.toLowerCase(),
+            confidence: result.confidence,
+            summary: result.summary,
+            matched_skills: result.matched_skills,
+            years_relevant_experience: result.years_relevant_experience,
+            short_reason: result.short_reason,
+            recommended_next_steps: result.recommended_next_steps,
+            email_draft: result.email_draft,
+          });
+
+        if (insertError) {
+          console.error('Failed to save candidate to database:', insertError);
+        }
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+      }
+
       // Send email based on verdict (async, non-blocking)
       if (shouldSendInterviewInvitation(result) || shouldSendRejectionEmail(result)) {
         sendCandidateEmail(data.fullName, data.email, result);
