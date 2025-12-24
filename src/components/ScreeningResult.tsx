@@ -1,5 +1,5 @@
 import { ScreeningResult as ScreeningResultType } from '@/lib/n8nResponseMapper';
-import { CheckCircle2, XCircle, Clock, Target, Briefcase, Lightbulb, TrendingUp, Calendar, Mail } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Lightbulb, Briefcase, TrendingUp, Calendar, Mail, Copy, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useState } from 'react';
 import { Button } from './ui/button';
@@ -10,6 +10,7 @@ interface ScreeningResultProps {
 
 export function ScreeningResult({ result }: ScreeningResultProps) {
   const [showEmailDraft, setShowEmailDraft] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const getVerdictConfig = (normalizedVerdict: string) => {
     switch (normalizedVerdict) {
@@ -18,15 +19,15 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
           icon: CheckCircle2,
           color: 'text-success',
           bgColor: 'bg-success/10',
-          borderColor: 'border-success/20',
-          label: 'Recommended for Interview',
+          borderColor: 'border-success/30',
+          label: 'Interview Recommended',
         };
       case 'Hold':
         return {
           icon: Clock,
           color: 'text-warning',
           bgColor: 'bg-warning/10',
-          borderColor: 'border-warning/20',
+          borderColor: 'border-warning/30',
           label: 'On Hold',
         };
       case 'Reject':
@@ -34,12 +35,12 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
           icon: XCircle,
           color: 'text-destructive',
           bgColor: 'bg-destructive/10',
-          borderColor: 'border-destructive/20',
+          borderColor: 'border-destructive/30',
           label: 'Not a Match',
         };
       default:
         return {
-          icon: Target,
+          icon: Clock,
           color: 'text-muted-foreground',
           bgColor: 'bg-muted',
           borderColor: 'border-border',
@@ -57,197 +58,206 @@ export function ScreeningResult({ result }: ScreeningResultProps) {
     return 'text-destructive';
   };
 
+  const getScoreRingColor = (score: number) => {
+    if (score >= 70) return 'stroke-success';
+    if (score >= 40) return 'stroke-warning';
+    return 'stroke-destructive';
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(result.email_draft || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <div className="space-y-6 animate-slide-up">
-      {/* Header with Score and Verdict */}
-      <div className="flex flex-col sm:flex-row items-center gap-6 p-6 bg-card rounded-xl border border-border shadow-soft-md">
-        {/* Score Circle */}
-        <div className="relative w-32 h-32 flex-shrink-0">
-          <svg className="w-full h-full transform -rotate-90">
-            <circle
-              cx="64"
-              cy="64"
-              r="56"
-              className="stroke-muted"
-              strokeWidth="8"
-              fill="none"
-            />
-            <circle
-              cx="64"
-              cy="64"
-              r="56"
-              className={cn("stroke-current", getScoreColor(result.overall_score))}
-              strokeWidth="8"
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={`${(result.overall_score / 100) * 352} 352`}
-              style={{ transition: 'stroke-dasharray 1s ease-out' }}
-            />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className={cn("text-3xl font-bold", getScoreColor(result.overall_score))}>
-              {result.overall_score}
-            </span>
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Score</span>
-          </div>
-        </div>
-
-        {/* Verdict */}
-        <div className="flex-1 text-center sm:text-left">
-          <div className={cn(
-            "inline-flex items-center gap-2 px-4 py-2 rounded-full border mb-3",
-            verdictConfig.bgColor,
-            verdictConfig.borderColor
-          )}>
-            <VerdictIcon className={cn("w-5 h-5", verdictConfig.color)} />
-            <span className={cn("font-semibold", verdictConfig.color)}>
-              {verdictConfig.label}
-            </span>
-          </div>
-          {result.confidence > 0 && (
-            <p className="text-muted-foreground text-sm">
-              Confidence: {result.confidence}%
-            </p>
-          )}
-        </div>
-      </div>
-
-      {/* Summary */}
-      <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
-        <div className="flex items-start gap-3 mb-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Lightbulb className="w-5 h-5 text-primary" />
-          </div>
-          <div>
-            <h3 className="font-semibold text-foreground mb-1">Summary</h3>
-            <p className="text-muted-foreground text-sm leading-relaxed">
-              {result.summary}
-            </p>
-          </div>
-        </div>
-      </div>
-
-      {/* Stats Grid - Only show if data exists */}
-      {(result.years_relevant_experience > 0 || result.matched_skills.length > 0) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          {/* Experience */}
-          {result.years_relevant_experience > 0 && (
-            <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
-              <div className="flex items-center gap-3 mb-2">
-                <div className="p-2 bg-accent/10 rounded-lg">
-                  <Briefcase className="w-5 h-5 text-accent" />
+      {/* Two-column layout on desktop */}
+      <div className="grid lg:grid-cols-5 gap-6">
+        {/* Left column - Score & Key Stats */}
+        <div className="lg:col-span-2 space-y-4">
+          {/* Score Ring Card */}
+          <div className="bg-card rounded-xl border border-border p-6 shadow-soft-sm">
+            <div className="flex flex-col items-center text-center">
+              {/* Score Circle */}
+              <div className="relative w-36 h-36 mb-4">
+                <svg className="w-full h-full transform -rotate-90">
+                  <circle
+                    cx="72"
+                    cy="72"
+                    r="64"
+                    className="stroke-muted"
+                    strokeWidth="10"
+                    fill="none"
+                  />
+                  <circle
+                    cx="72"
+                    cy="72"
+                    r="64"
+                    className={cn("transition-all duration-1000", getScoreRingColor(result.overall_score))}
+                    strokeWidth="10"
+                    fill="none"
+                    strokeLinecap="round"
+                    strokeDasharray={`${(result.overall_score / 100) * 402} 402`}
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                  <span className={cn("text-4xl font-bold", getScoreColor(result.overall_score))}>
+                    {result.overall_score}
+                  </span>
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-medium">Score</span>
                 </div>
-                <h3 className="font-semibold text-foreground">Experience</h3>
               </div>
-              <p className="text-2xl font-bold text-foreground">
-                {result.years_relevant_experience} <span className="text-base font-normal text-muted-foreground">years</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1">Relevant experience</p>
+
+              {/* Verdict Pill */}
+              <div className={cn(
+                "inline-flex items-center gap-2 px-4 py-2 rounded-full border",
+                verdictConfig.bgColor,
+                verdictConfig.borderColor
+              )}>
+                <VerdictIcon className={cn("w-4 h-4", verdictConfig.color)} />
+                <span className={cn("font-semibold text-sm", verdictConfig.color)}>
+                  {verdictConfig.label}
+                </span>
+              </div>
             </div>
-          )}
+          </div>
+
+          {/* Quick Stats */}
+          <div className="grid grid-cols-2 gap-4">
+            {result.confidence > 0 && (
+              <div className="bg-card rounded-xl border border-border p-4 shadow-soft-sm">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Confidence</p>
+                <p className="text-2xl font-bold text-foreground">{result.confidence}%</p>
+              </div>
+            )}
+            {result.years_relevant_experience > 0 && (
+              <div className="bg-card rounded-xl border border-border p-4 shadow-soft-sm">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Experience</p>
+                <p className="text-2xl font-bold text-foreground">{result.years_relevant_experience} <span className="text-base font-normal text-muted-foreground">yrs</span></p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right column - Details */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Summary Card */}
+          <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm">
+            <div className="flex items-start gap-3">
+              <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                <Lightbulb className="w-5 h-5 text-primary" />
+              </div>
+              <div>
+                <h3 className="font-semibold text-foreground mb-2">Summary</h3>
+                <p className="text-muted-foreground text-sm leading-relaxed">
+                  {result.summary}
+                </p>
+              </div>
+            </div>
+          </div>
 
           {/* Matched Skills */}
           {result.matched_skills.length > 0 && (
-            <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm">
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm">
               <div className="flex items-center gap-3 mb-3">
                 <div className="p-2 bg-success/10 rounded-lg">
                   <TrendingUp className="w-5 h-5 text-success" />
                 </div>
-                <h3 className="font-semibold text-foreground">Matched Skills</h3>
+                <h3 className="font-semibold text-foreground">Strengths & Skills</h3>
               </div>
               <div className="flex flex-wrap gap-2">
-                {result.matched_skills.slice(0, 6).map((skill, index) => (
+                {result.matched_skills.map((skill, index) => (
                   <span
                     key={index}
-                    className="px-2.5 py-1 text-xs font-medium bg-success/10 text-success rounded-full"
+                    className="px-3 py-1.5 text-xs font-medium bg-success/10 text-success rounded-full"
                   >
                     {skill}
                   </span>
                 ))}
-                {result.matched_skills.length > 6 && (
-                  <span className="px-2.5 py-1 text-xs font-medium bg-muted text-muted-foreground rounded-full">
-                    +{result.matched_skills.length - 6} more
-                  </span>
-                )}
               </div>
             </div>
           )}
-        </div>
-      )}
 
-      {/* Next Steps */}
-      {result.recommended_next_steps.length > 0 && (
-        <div className="p-5 bg-gradient-to-br from-primary/5 to-primary/10 rounded-xl border border-primary/20">
-          <h3 className="font-semibold text-foreground mb-3">Recommended Next Steps</h3>
-          <ul className="space-y-2">
-            {result.recommended_next_steps.map((step, index) => (
-              <li key={index} className="flex items-start gap-2 text-muted-foreground text-sm">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-medium flex items-center justify-center mt-0.5">
-                  {index + 1}
-                </span>
-                <span className="leading-relaxed">{step}</span>
-              </li>
-            ))}
-          </ul>
+          {/* Next Steps */}
+          {result.recommended_next_steps.length > 0 && (
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm">
+              <div className="flex items-center gap-3 mb-3">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Briefcase className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="font-semibold text-foreground">Recommended Next Steps</h3>
+              </div>
+              <ul className="space-y-2.5">
+                {result.recommended_next_steps.map((step, index) => (
+                  <li key={index} className="flex items-start gap-3 text-muted-foreground text-sm">
+                    <span className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-semibold flex items-center justify-center mt-0.5">
+                      {index + 1}
+                    </span>
+                    <span className="leading-relaxed">{step}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
-      {/* Calendar Link & Email Draft (Bonus Features) */}
+      {/* Calendar Link & Email Draft */}
       {(result.calendar_link || result.email_draft) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="flex flex-wrap gap-3">
           {result.calendar_link && result.normalizedVerdict === 'Interview' && (
             <a
               href={result.calendar_link}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border shadow-soft-sm hover:border-primary/30 hover:shadow-soft-md transition-all"
+              className="inline-flex items-center gap-2 px-4 py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm hover:opacity-90 transition-opacity"
             >
-              <div className="p-2.5 bg-primary/10 rounded-lg flex-shrink-0">
-                <Calendar className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground text-sm">Schedule Interview</p>
-                <p className="text-xs text-muted-foreground">Book a time slot</p>
-              </div>
+              <Calendar className="w-4 h-4" />
+              Schedule Interview
             </a>
           )}
           
           {result.email_draft && (
-            <button
+            <Button
+              variant="outline"
               onClick={() => setShowEmailDraft(!showEmailDraft)}
-              className="flex items-center gap-3 p-4 bg-card rounded-xl border border-border shadow-soft-sm hover:border-primary/30 hover:shadow-soft-md transition-all text-left"
+              className="gap-2"
             >
-              <div className="p-2.5 bg-accent/10 rounded-lg flex-shrink-0">
-                <Mail className="w-5 h-5 text-accent" />
-              </div>
-              <div>
-                <p className="font-medium text-foreground text-sm">Email Draft</p>
-                <p className="text-xs text-muted-foreground">
-                  {showEmailDraft ? 'Hide draft' : 'View suggested email'}
-                </p>
-              </div>
-            </button>
+              <Mail className="w-4 h-4" />
+              {showEmailDraft ? 'Hide Email Draft' : 'View Email Draft'}
+            </Button>
           )}
         </div>
       )}
 
       {/* Email Draft Content */}
       {showEmailDraft && result.email_draft && (
-        <div className="p-5 bg-card rounded-xl border border-border shadow-soft-sm animate-fade-in">
-          <h4 className="font-semibold text-foreground mb-3">Suggested Email to Candidate</h4>
-          <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed bg-muted/50 p-4 rounded-lg">
+        <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm animate-fade-in">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="font-semibold text-foreground">Suggested Email to Candidate</h4>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              className="gap-2 h-8"
+            >
+              {copied ? (
+                <>
+                  <Check className="w-3.5 h-3.5" />
+                  Copied
+                </>
+              ) : (
+                <>
+                  <Copy className="w-3.5 h-3.5" />
+                  Copy
+                </>
+              )}
+            </Button>
+          </div>
+          <pre className="text-sm text-muted-foreground whitespace-pre-wrap font-sans leading-relaxed bg-muted/50 p-4 rounded-lg border border-border">
             {result.email_draft}
           </pre>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() => {
-              navigator.clipboard.writeText(result.email_draft || '');
-            }}
-          >
-            Copy to Clipboard
-          </Button>
         </div>
       )}
     </div>

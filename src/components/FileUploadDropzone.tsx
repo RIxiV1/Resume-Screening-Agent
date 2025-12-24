@@ -92,52 +92,52 @@ export function FileUploadDropzone({ file, onFileSelect, error, disabled }: File
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "flex flex-col items-center justify-center w-full min-h-[180px] px-6 py-8 rounded-lg border-2 border-dashed transition-all duration-200 cursor-pointer",
+            "flex flex-col items-center justify-center w-full min-h-[160px] px-6 py-8 rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer",
             isDragging 
-              ? "border-primary bg-primary/5 scale-[1.02]" 
-              : "border-muted-foreground/25 hover:border-primary/50 hover:bg-muted/50",
+              ? "border-primary bg-primary/5" 
+              : "border-border hover:border-primary/50 hover:bg-muted/50",
             displayError && "border-destructive/50 bg-destructive/5",
             disabled && "opacity-50 cursor-not-allowed"
           )}
         >
           <div className={cn(
-            "p-4 rounded-full mb-4 transition-colors",
+            "p-3 rounded-xl mb-4 transition-colors",
             isDragging ? "bg-primary/10" : "bg-muted"
           )}>
             <Upload className={cn(
-              "w-8 h-8 transition-colors",
+              "w-6 h-6 transition-colors",
               isDragging ? "text-primary" : "text-muted-foreground"
             )} />
           </div>
           
-          <p className="text-base font-medium text-foreground mb-1">
-            {isDragging ? "Drop your resume here" : "Upload your resume"}
+          <p className="text-sm font-medium text-foreground mb-1">
+            {isDragging ? "Drop your resume here" : "Drag & drop your resume"}
           </p>
-          <p className="text-sm text-muted-foreground mb-3">
-            Drag and drop or click to browse
+          <p className="text-xs text-muted-foreground mb-2">
+            or click to browse
           </p>
           <p className="text-xs text-muted-foreground">
             PDF only • Max {MAX_FILE_SIZE / 1024 / 1024}MB
           </p>
         </label>
       ) : (
-        <div className="flex items-center gap-4 p-4 bg-muted/50 rounded-lg border border-border">
-          <div className="p-3 bg-primary/10 rounded-lg">
-            <FileText className="w-6 h-6 text-primary" />
+        <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-xl border border-border">
+          <div className="p-2.5 bg-primary/10 rounded-lg">
+            <FileText className="w-5 h-5 text-primary" />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-foreground truncate">
               {file.name}
             </p>
             <p className="text-xs text-muted-foreground">
-              {formatFileSize(file.size)} • PDF
+              {formatFileSize(file.size)}
             </p>
           </div>
           <button
             type="button"
             onClick={handleRemoveFile}
             disabled={disabled}
-            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-md transition-colors disabled:opacity-50"
+            className="p-2 text-muted-foreground hover:text-destructive hover:bg-destructive/10 rounded-lg transition-colors disabled:opacity-50"
             aria-label="Remove file"
           >
             <X className="w-4 h-4" />
@@ -147,7 +147,7 @@ export function FileUploadDropzone({ file, onFileSelect, error, disabled }: File
 
       {displayError && (
         <div className="flex items-center gap-2 text-destructive text-sm animate-fade-in">
-          <AlertCircle className="w-4 h-4 flex-shrink-0" />
+          <AlertCircle className="w-4 h-4 shrink-0" />
           <span>{displayError}</span>
         </div>
       )}
