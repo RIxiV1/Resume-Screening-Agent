@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { FileSearch, Loader2 } from 'lucide-react';
+import { Loader2, Users, TrendingUp, Clock } from 'lucide-react';
+import { Header } from '@/components/layout/Header';
 import { CandidateFilters } from '@/components/dashboard/CandidateFilters';
 import { CandidatesTable } from '@/components/dashboard/CandidatesTable';
 import { CandidateDetailModal } from '@/components/dashboard/CandidateDetailModal';
@@ -27,6 +27,13 @@ const Dashboard = () => {
     return filtered;
   }, [candidates, roleFilter, minScoreFilter]);
 
+  const stats = useMemo(() => {
+    const total = candidates.length;
+    const avgScore = total > 0 ? Math.round(candidates.reduce((sum, c) => sum + c.score, 0) / total) : 0;
+    const interviewReady = candidates.filter(c => c.verdict === 'interview').length;
+    return { total, avgScore, interviewReady };
+  }, [candidates]);
+
   const handleApplyFilters = (role: string, minScore: number) => {
     setRoleFilter(role);
     setMinScoreFilter(minScore);
@@ -38,55 +45,74 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container max-w-7xl mx-auto px-4 sm:px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="p-2 bg-primary rounded-lg">
-                <FileSearch className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <span className="text-xl font-semibold text-foreground">ResumeScreen</span>
-            </Link>
-            <nav>
-              <Link 
-                to="/dashboard" 
-                className="text-sm font-medium text-foreground hover:text-primary transition-colors"
-              >
-                Candidate Dashboard
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background flex flex-col">
+      <Header />
 
-      <main className="container max-w-7xl mx-auto px-4 sm:px-6 py-8">
+      <main className="flex-1 container max-w-7xl mx-auto px-4 sm:px-6 py-8">
         {/* Page Title */}
         <div className="mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
-            HR Review Dashboard
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-1">
+            HR Dashboard
           </h1>
           <p className="text-muted-foreground">
-            Review and manage candidate applications efficiently.
+            Review and manage screened candidate applications.
           </p>
         </div>
 
+        {/* Stats Cards */}
+        {!loading && !error && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-primary/10 rounded-lg">
+                  <Users className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.total}</p>
+                  <p className="text-sm text-muted-foreground">Total Candidates</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-success/10 rounded-lg">
+                  <TrendingUp className="w-5 h-5 text-success" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.avgScore}%</p>
+                  <p className="text-sm text-muted-foreground">Average Score</p>
+                </div>
+              </div>
+            </div>
+            <div className="bg-card rounded-xl border border-border p-5 shadow-soft-sm">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-warning/10 rounded-lg">
+                  <Clock className="w-5 h-5 text-warning" />
+                </div>
+                <div>
+                  <p className="text-2xl font-bold text-foreground">{stats.interviewReady}</p>
+                  <p className="text-sm text-muted-foreground">Interview Ready</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Loading State */}
         {loading && (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-8 h-8 animate-spin text-primary" />
-            <span className="ml-3 text-muted-foreground">Loading candidates...</span>
+          <div className="flex flex-col items-center justify-center py-16">
+            <Loader2 className="w-8 h-8 animate-spin text-primary mb-3" />
+            <p className="text-muted-foreground">Loading candidates...</p>
           </div>
         )}
 
         {/* Error State */}
         {error && (
-          <div className="p-4 bg-destructive/10 border border-destructive/20 rounded-lg mb-6">
-            <p className="text-destructive">{error}</p>
+          <div className="p-5 bg-destructive/10 border border-destructive/20 rounded-xl mb-6">
+            <p className="text-destructive font-medium">{error}</p>
             <button 
               onClick={refetch}
-              className="mt-2 text-sm text-primary hover:underline"
+              className="mt-2 text-sm text-primary hover:underline font-medium"
             >
               Try again
             </button>

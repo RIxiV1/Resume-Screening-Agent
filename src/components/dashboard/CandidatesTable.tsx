@@ -13,6 +13,7 @@ import {
 import { Candidate } from '@/types/candidate';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Send, UserX, CheckCircle2 } from 'lucide-react';
 
 interface CandidatesTableProps {
   candidates: Candidate[];
@@ -28,26 +29,27 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
       .split(' ')
       .map((n) => n[0])
       .join('')
-      .toUpperCase();
+      .toUpperCase()
+      .slice(0, 2);
   };
 
   const getVerdictBadge = (verdict: Candidate['verdict']) => {
     switch (verdict) {
       case 'interview':
         return (
-          <Badge className="bg-success text-success-foreground hover:bg-success/90">
+          <Badge className="bg-success/10 text-success border-success/30 hover:bg-success/20">
             Interview
           </Badge>
         );
       case 'reject':
         return (
-          <Badge variant="destructive">
+          <Badge className="bg-destructive/10 text-destructive border-destructive/30 hover:bg-destructive/20">
             Reject
           </Badge>
         );
       case 'hold':
         return (
-          <Badge className="bg-warning text-warning-foreground hover:bg-warning/90">
+          <Badge className="bg-warning/10 text-warning border-warning/30 hover:bg-warning/20">
             Hold
           </Badge>
         );
@@ -56,12 +58,18 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
     }
   };
 
+  const getScoreColor = (score: number) => {
+    if (score >= 70) return 'text-success';
+    if (score >= 40) return 'text-warning';
+    return 'text-destructive';
+  };
+
   const handleSendEmail = async (
     e: React.MouseEvent, 
     candidate: Candidate, 
     type: 'interview' | 'rejection'
   ) => {
-    e.stopPropagation(); // Prevent row click
+    e.stopPropagation();
     setSendingEmail((prev) => ({ ...prev, [candidate.id]: type }));
     
     try {
@@ -84,7 +92,6 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
         throw error;
       }
 
-      // Update the email sent status in the database
       await onEmailStatusUpdate(candidate.id, type);
       
       toast.success(
@@ -101,11 +108,11 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
   };
 
   return (
-    <div className="bg-card rounded-xl border border-border overflow-hidden">
-      <div className="p-6 border-b border-border">
-        <h2 className="text-lg font-semibold text-foreground">Candidate Applications</h2>
-        <p className="text-sm text-muted-foreground mt-1">
-          Overview of all submitted applications and their AI screening results.
+    <div className="bg-card rounded-xl border border-border overflow-hidden shadow-soft-sm">
+      <div className="p-5 border-b border-border">
+        <h2 className="font-semibold text-foreground">Candidates</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          {candidates.length} application{candidates.length !== 1 ? 's' : ''} found
         </p>
       </div>
 
@@ -113,19 +120,19 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
-              <TableHead className="w-[250px]">Candidate</TableHead>
-              <TableHead>Role / JD</TableHead>
-              <TableHead className="text-center">Score</TableHead>
-              <TableHead className="text-center">Verdict</TableHead>
-              <TableHead>Submitted On</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
+              <TableHead className="w-[220px]">Candidate</TableHead>
+              <TableHead className="hidden md:table-cell">Role</TableHead>
+              <TableHead className="text-center w-[80px]">Score</TableHead>
+              <TableHead className="text-center w-[100px]">Verdict</TableHead>
+              <TableHead className="hidden sm:table-cell w-[120px]">Submitted</TableHead>
+              <TableHead className="text-right w-[200px]">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {candidates.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                  No candidates found. Submissions will appear here automatically.
+                <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  No candidates found matching your filters.
                 </TableCell>
               </TableRow>
             ) : (
@@ -137,25 +144,38 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
                 >
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <Avatar className="h-10 w-10">
+                      <Avatar className="h-9 w-9">
                         <AvatarImage src={candidate.avatarUrl} alt={candidate.name} />
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
+                        <AvatarFallback className="bg-primary/10 text-primary text-xs font-medium">
                           {getInitials(candidate.name)}
                         </AvatarFallback>
                       </Avatar>
-                      <span className="font-medium text-foreground">{candidate.name}</span>
+                      <div className="min-w-0">
+                        <p className="font-medium text-foreground truncate">{candidate.name}</p>
+                        <p className="text-xs text-muted-foreground truncate md:hidden">
+                          {candidate.role.length > 30 ? candidate.role.substring(0, 30) + '...' : candidate.role}
+                        </p>
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground">{candidate.role}</TableCell>
-                  <TableCell className="text-center font-medium text-foreground">
-                    {candidate.score}%
+                  <TableCell className="hidden md:table-cell">
+                    <span className="text-muted-foreground text-sm">
+                      {candidate.role.length > 40 ? candidate.role.substring(0, 40) + '...' : candidate.role}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <span className={`font-semibold ${getScoreColor(candidate.score)}`}>
+                      {candidate.score}
+                    </span>
                   </TableCell>
                   <TableCell className="text-center">{getVerdictBadge(candidate.verdict)}</TableCell>
-                  <TableCell className="text-muted-foreground">{candidate.submittedAt}</TableCell>
+                  <TableCell className="hidden sm:table-cell text-muted-foreground text-sm">
+                    {candidate.submittedAt}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-2">
+                    <div className="flex items-center justify-end gap-1.5">
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={(e) => handleSendEmail(e, candidate, 'interview')}
                         disabled={
@@ -163,15 +183,23 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
                           sendingEmail[candidate.id] !== null ||
                           candidate.interview_email_sent
                         }
+                        className="h-8 px-2.5 gap-1.5"
                       >
-                        {sendingEmail[candidate.id] === 'interview' 
-                          ? 'Sending...' 
-                          : candidate.interview_email_sent 
-                            ? 'Interview Sent'
-                            : 'Send Interview Email'}
+                        {candidate.interview_email_sent ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-success" />
+                        ) : (
+                          <Send className="w-3.5 h-3.5" />
+                        )}
+                        <span className="hidden lg:inline">
+                          {sendingEmail[candidate.id] === 'interview' 
+                            ? 'Sending...' 
+                            : candidate.interview_email_sent 
+                              ? 'Sent'
+                              : 'Interview'}
+                        </span>
                       </Button>
                       <Button
-                        variant="destructive"
+                        variant="ghost"
                         size="sm"
                         onClick={(e) => handleSendEmail(e, candidate, 'rejection')}
                         disabled={
@@ -179,12 +207,20 @@ export function CandidatesTable({ candidates, onCandidateClick, onEmailStatusUpd
                           sendingEmail[candidate.id] !== null ||
                           candidate.rejection_email_sent
                         }
+                        className="h-8 px-2.5 gap-1.5 text-muted-foreground hover:text-destructive"
                       >
-                        {sendingEmail[candidate.id] === 'rejection' 
-                          ? 'Sending...' 
-                          : candidate.rejection_email_sent
-                            ? 'Rejection Sent'
-                            : 'Send Rejection Email'}
+                        {candidate.rejection_email_sent ? (
+                          <CheckCircle2 className="w-3.5 h-3.5 text-muted-foreground" />
+                        ) : (
+                          <UserX className="w-3.5 h-3.5" />
+                        )}
+                        <span className="hidden lg:inline">
+                          {sendingEmail[candidate.id] === 'rejection' 
+                            ? 'Sending...' 
+                            : candidate.rejection_email_sent
+                              ? 'Sent'
+                              : 'Reject'}
+                        </span>
                       </Button>
                     </div>
                   </TableCell>
