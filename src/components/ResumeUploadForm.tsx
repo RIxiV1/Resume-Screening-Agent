@@ -129,6 +129,12 @@ export function ResumeUploadForm() {
       formData.append('Email Address', data.email);
       formData.append('Full Name', data.fullName);
       formData.append('job_description', data.jobDescription);
+      
+      // Honeypot field for bot detection (should be empty for real users)
+      const honeypotField = document.getElementById('website') as HTMLInputElement;
+      if (honeypotField && honeypotField.value) {
+        formData.append('website', honeypotField.value);
+      }
 
       console.log('Submitting to n8n webhook:', N8N_WEBHOOK_URL);
       console.log('Form data fields:', {
@@ -392,6 +398,18 @@ export function ResumeUploadForm() {
               Start Over
             </Button>
           )}
+        </div>
+        
+        {/* Honeypot field - hidden from users, catches bots */}
+        <div className="absolute opacity-0 pointer-events-none" aria-hidden="true" tabIndex={-1}>
+          <label htmlFor="website">Website (leave blank)</label>
+          <input 
+            type="text" 
+            id="website" 
+            name="website" 
+            autoComplete="off"
+            tabIndex={-1}
+          />
         </div>
       </form>
 
