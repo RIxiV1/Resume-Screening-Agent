@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -7,6 +8,10 @@ const corsHeaders = {
 
 const N8N_WEBHOOK_URL = "https://suhaibbb.app.n8n.cloud/webhook/screen-resume";
 const AI_GATEWAY_URL = "https://ai.gateway.lovable.dev/v1/chat/completions";
+
+// Rate limiting configuration
+const RATE_LIMIT_WINDOW_MS = 3600000; // 1 hour
+const RATE_LIMIT_MAX_REQUESTS = 5; // 5 submissions per IP per hour
 
 interface ScreeningResult {
   overall_score: number;
@@ -18,6 +23,71 @@ interface ScreeningResult {
   recommended_next_steps: string;
   calendar_link?: string;
   email_draft?: string;
+}
+
+interface RateLimitEntry {
+  count: number;
+  firstRequest: number;
+}
+
+// In-memory rate limit store (resets on function cold start)
+const rateLimitStore = new Map<string, RateLimitEntry>();
+
+function getClientIP(req: Request): string {
+  // Try various headers that might contain the real IP
+  const forwardedFor = req.headers.get("x-forwarded-for");
+  if (forwardedFor) {
+    // x-forwarded-for can be a comma-separated list, take the first IP
+    return forwardedFor.split(",")[0].trim();
+  }
+  
+  const realIP = req.headers.get("x-real-ip");
+  if (realIP) {
+    return realIP;
+  }
+  
+  // Fallback to a hash of user-agent + accept-language for some uniqueness
+  const userAgent = req.headers.get("user-agent") || "";
+  const acceptLang = req.headers.get("accept-language") || "";
+  return `unknown-${hashString(userAgent + acceptLang)}`;
+}
+
+function hashString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(16);
+}
+
+function checkRateLimit(clientIP: string): { allowed: boolean; retryAfter?: number; remaining: number } {
+  const now = Date.now();
+  const entry = rateLimitStore.get(clientIP);
+  
+  // Clean up old entries
+  if (entry && (now - entry.firstRequest) > RATE_LIMIT_WINDOW_MS) {
+    rateLimitStore.delete(clientIP);
+  }
+  
+  const currentEntry = rateLimitStore.get(clientIP);
+  
+  if (!currentEntry) {
+    // First request from this IP
+    rateLimitStore.set(clientIP, { count: 1, firstRequest: now });
+    return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - 1 };
+  }
+  
+  if (currentEntry.count >= RATE_LIMIT_MAX_REQUESTS) {
+    const retryAfter = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - currentEntry.firstRequest)) / 1000);
+    return { allowed: false, retryAfter, remaining: 0 };
+  }
+  
+  // Increment count
+  currentEntry.count++;
+  rateLimitStore.set(clientIP, currentEntry);
+  return { allowed: true, remaining: RATE_LIMIT_MAX_REQUESTS - currentEntry.count };
 }
 
 async function tryN8nWebhook(formData: FormData): Promise<ScreeningResult | null> {
@@ -35,7 +105,7 @@ async function tryN8nWebhook(formData: FormData): Promise<ScreeningResult | null
     }
 
     const result = await response.json();
-    console.log("n8n response:", JSON.stringify(result));
+    console.log("n8n response received");
     
     // Validate the response has required fields
     if (
@@ -178,7 +248,7 @@ Provide your analysis using the suggest_screening_result function.`;
 
   if (!response.ok) {
     const errorText = await response.text();
-    console.error("AI gateway error:", response.status, errorText);
+    console.error("AI gateway error:", response.status);
     
     if (response.status === 429) {
       throw new Error("Rate limit exceeded. Please try again in a few moments.");
@@ -190,7 +260,7 @@ Provide your analysis using the suggest_screening_result function.`;
   }
 
   const aiResponse = await response.json();
-  console.log("AI response:", JSON.stringify(aiResponse));
+  console.log("AI response received");
 
   // Extract the tool call result
   const toolCall = aiResponse.choices?.[0]?.message?.tool_calls?.[0];
@@ -257,6 +327,30 @@ serve(async (req) => {
   }
 
   try {
+    // Get client IP for rate limiting
+    const clientIP = getClientIP(req);
+    console.log("Request from IP:", clientIP.substring(0, 10) + "...");
+    
+    // Check rate limit
+    const rateLimit = checkRateLimit(clientIP);
+    if (!rateLimit.allowed) {
+      console.log("Rate limit exceeded for IP:", clientIP.substring(0, 10) + "...");
+      return new Response(
+        JSON.stringify({ 
+          error: "Too many submissions. Please try again later.",
+          retryAfter: rateLimit.retryAfter
+        }),
+        { 
+          status: 429, 
+          headers: { 
+            ...corsHeaders, 
+            "Content-Type": "application/json",
+            "Retry-After": String(rateLimit.retryAfter)
+          } 
+        }
+      );
+    }
+    
     const contentType = req.headers.get("content-type") || "";
     
     let fullName: string;
@@ -269,16 +363,53 @@ serve(async (req) => {
       // Handle multipart form data (file upload)
       const formData = await req.formData();
       
+      // Honeypot check - if hidden field is filled, it's a bot
+      const honeypot = formData.get("website") as string || "";
+      if (honeypot) {
+        console.log("Honeypot triggered - bot detected");
+        // Return fake success to not reveal detection
+        return new Response(
+          JSON.stringify({ 
+            overall_score: 0, 
+            verdict: "Hold",
+            confidence: 0,
+            matched_skills: [],
+            years_relevant_experience: 0,
+            short_reason: "Application received and under review.",
+            recommended_next_steps: "We will contact you if there's a match."
+          }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       fullName = formData.get("Full Name") as string || "";
       email = formData.get("Email Address") as string || "";
       jobDescription = formData.get("job_description") as string || "";
       resumeFile = formData.get("Resume_PDF_only_") as File | null;
 
-      console.log("Received submission:", { fullName, email, hasResume: !!resumeFile });
+      console.log("Received submission from:", email.substring(0, 3) + "***");
 
+      // Input validation
       if (!fullName || !email || !jobDescription) {
         return new Response(
           JSON.stringify({ error: "Missing required fields: Full Name, Email Address, or job_description" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid email address format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Validate input lengths to prevent abuse
+      if (fullName.length > 200 || email.length > 320 || jobDescription.length > 10000) {
+        return new Response(
+          JSON.stringify({ error: "Input exceeds maximum allowed length" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -286,6 +417,14 @@ serve(async (req) => {
       if (!resumeFile) {
         return new Response(
           JSON.stringify({ error: "Please upload a PDF resume" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Validate file size (max 10MB)
+      if (resumeFile.size > 10 * 1024 * 1024) {
+        return new Response(
+          JSON.stringify({ error: "Resume file too large. Maximum size is 10MB." }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
@@ -325,7 +464,7 @@ serve(async (req) => {
           resumeText = `[PDF Resume uploaded: ${resumeFile.name}, Size: ${resumeFile.size} bytes. Unable to extract text - please ensure the PDF contains searchable text, not just images.]`;
         }
       } catch (e) {
-        console.error("PDF text extraction failed:", e);
+        console.error("PDF text extraction failed");
         resumeText = `[PDF Resume: ${resumeFile.name}]`;
       }
 
@@ -343,6 +482,23 @@ serve(async (req) => {
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
+      
+      // Validate email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        return new Response(
+          JSON.stringify({ error: "Invalid email address format" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
+      // Validate input lengths
+      if (fullName.length > 200 || email.length > 320 || jobDescription.length > 10000) {
+        return new Response(
+          JSON.stringify({ error: "Input exceeds maximum allowed length" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Use AI fallback
@@ -354,12 +510,12 @@ serve(async (req) => {
     });
 
   } catch (error) {
-    console.error("Screen resume error:", error);
+    console.error("Screen resume error:", error instanceof Error ? error.message : "Unknown error");
     
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
     
     // Map specific errors to user-friendly messages
-    let userMessage = errorMessage;
+    let userMessage = "An error occurred processing your submission.";
     if (errorMessage.includes("Rate limit")) {
       userMessage = "Temporary processing error — please try again in a few moments.";
     } else if (errorMessage.includes("credits")) {
