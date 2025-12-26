@@ -1,11 +1,15 @@
 import { Link, useLocation } from 'react-router-dom';
-import { FileSearch } from 'lucide-react';
+import { FileSearch, LogOut } from 'lucide-react';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { Button } from '@/components/ui/button';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 export function Header() {
   const location = useLocation();
+  const { user, signOut } = useAuth();
   const isDashboard = location.pathname === '/dashboard';
+  const isAuthPage = location.pathname === '/auth';
 
   return (
     <header className="border-b border-border bg-card/80 backdrop-blur-sm sticky top-0 z-50">
@@ -21,17 +25,30 @@ export function Header() {
 
           {/* Right side */}
           <div className="flex items-center gap-1">
-            <nav className="mr-2">
-              <Link 
-                to={isDashboard ? '/' : '/dashboard'}
-                className={cn(
-                  "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
-                  "text-muted-foreground hover:text-foreground hover:bg-muted"
+            {!isAuthPage && (
+              <nav className="mr-2 flex items-center gap-2">
+                <Link 
+                  to={isDashboard ? '/' : '/dashboard'}
+                  className={cn(
+                    "text-sm font-medium px-3 py-2 rounded-lg transition-colors",
+                    "text-muted-foreground hover:text-foreground hover:bg-muted"
+                  )}
+                >
+                  {isDashboard ? 'Submit Resume' : 'HR Dashboard'}
+                </Link>
+                {user && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={signOut}
+                    className="gap-1.5 text-muted-foreground hover:text-foreground"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span className="hidden sm:inline">Sign out</span>
+                  </Button>
                 )}
-              >
-                {isDashboard ? 'Submit Resume' : 'HR Dashboard'}
-              </Link>
-            </nav>
+              </nav>
+            )}
             <ThemeToggle />
           </div>
         </div>
