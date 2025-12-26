@@ -1,13 +1,17 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Loader2, Users, TrendingUp, Clock } from 'lucide-react';
 import { Header } from '@/components/layout/Header';
 import { CandidateFilters } from '@/components/dashboard/CandidateFilters';
 import { CandidatesTable } from '@/components/dashboard/CandidatesTable';
 import { CandidateDetailModal } from '@/components/dashboard/CandidateDetailModal';
 import { useCandidates } from '@/hooks/useCandidates';
+import { useAuth } from '@/hooks/useAuth';
 import { Candidate } from '@/types/candidate';
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  const { user, loading: authLoading } = useAuth();
   const { candidates, loading, error, refetch, updateEmailStatus } = useCandidates();
   const [roleFilter, setRoleFilter] = useState('');
   const [minScoreFilter, setMinScoreFilter] = useState(0);
@@ -15,6 +19,13 @@ const Dashboard = () => {
   const [detailModalOpen, setDetailModalOpen] = useState(false);
 
   const roles = useMemo(() => [...new Set(candidates.map((c) => c.role))], [candidates]);
+
+  // Redirect to auth if not logged in
+  useEffect(() => {
+    if (!authLoading && !user) {
+      navigate('/auth');
+    }
+  }, [user, authLoading, navigate]);
 
   const filteredCandidates = useMemo(() => {
     let filtered = candidates;
@@ -43,6 +54,20 @@ const Dashboard = () => {
     setSelectedCandidate(candidate);
     setDetailModalOpen(true);
   };
+
+  // Show loading while checking auth
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  // Don't render dashboard if not authenticated
+  if (!user) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
